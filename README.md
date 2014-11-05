@@ -52,6 +52,13 @@ running successfully again soon.
 
     cronwrap --suppress 3 <job>
 
+# Database support for basic clustering (poor-man-cluster) #
+
+If enabled cronwrap will check if the hostname is present and active in a table on a db.
+
+    cronwrap --database <job>
+
+
 # Downloads #
 
 Tarballs available from the

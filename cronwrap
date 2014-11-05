@@ -8,6 +8,11 @@ use Getopt::Long;
 use Pod::Usage;
 use Data::Dumper;
 use Sys::Hostname;
+
+use DBI;
+use Time::Local qw(timelocal);
+use Config::Abstract::Ini;
+
 use POSIX qw(nice sys_wait_h);  # POSIX::nice, WNOHANG for waitpid
 my $sha;
 eval { return if $sha; require Digest::SHA; Digest::SHA->import(qw(sha1_hex)); $sha = 'sha' };
@@ -31,6 +36,7 @@ my $result = GetOptions(\%options,
                         'nice=i',
                         'timeout=s',
                         'suppress=i',
+                        'database',
                         'debug',
                         'version',
                         'help',
@@ -186,6 +192,33 @@ if ($options{nice})
 {
   print "Setting priority to $options{nice}\n" if ($options{debug});
   POSIX::nice($options{nice}) or die "nice $options{nice}: $!\n";
+}
+
+
+if ($options{database})
+{
+  my $settings = new Config::Abstract::Ini('cronwrap.ini');
+  my $dbh = DBI->connect(
+       "DBI:mysql:database="
+         . $settings->get_entry_setting( 'DATABASE', 'DBName' )
+         . ";host="
+         . $settings->get_entry_setting( 'DATABASE', 'DBServer' ),
+       $settings->get_entry_setting( 'DATABASE', 'DBUser' ),
+       $settings->get_entry_setting( 'DATABASE', 'DBPassword' ),
+       { 'RaiseError' => 1 }
+  );
+
+  my $sth = $dbh->prepare("select hostname from pfmo0_infrastructure where hostname=? and cron_status='ACTIVE'");
+  $sth->execute(hostname());
+  my %hash = %{$sth->fetchall_hashref('hostname')};
+  $sth->finish();
+
+  # print Dumper(%hash);
+
+  # if no host was found bail out
+  if ((keys %hash) == 0) {
+    exit 0;
+  }
 }
 
 #
@@ -365,6 +398,7 @@ Options:
 --nice=PRIORITY
 --timeout=TIME
 --suppress=COUNT
+--database
 --debug
 --version
 --help
@@ -396,6 +430,10 @@ same format as jitter.
 
 Suppress non-zero exit values and output unless the job has COUNT consecutive
 failures.
+
+=item B<--database>
+
+Checks if the returned hostname is equal to `hostname`, if so it executes the job otherwise exit 0.
 
 =item B<--debug>
 

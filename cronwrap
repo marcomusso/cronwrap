@@ -8,11 +8,9 @@ use Getopt::Long;
 use Pod::Usage;
 use Data::Dumper;
 use Sys::Hostname;
-
-use DBI;
-use Time::Local qw(timelocal);
-use Config::Abstract::Ini;
-
+# Added by MarcoMusso to handle db connection and config file
+  use DBI;
+  use Config::Abstract::Ini;
 use POSIX qw(nice sys_wait_h);  # POSIX::nice, WNOHANG for waitpid
 my $sha;
 eval { return if $sha; require Digest::SHA; Digest::SHA->import(qw(sha1_hex)); $sha = 'sha' };
@@ -194,6 +192,9 @@ if ($options{nice})
   POSIX::nice($options{nice}) or die "nice $options{nice}: $!\n";
 }
 
+#
+# Database
+#
 
 if ($options{database})
 {
@@ -208,16 +209,12 @@ if ($options{database})
        { 'RaiseError' => 1 }
   );
 
-  my $sth = $dbh->prepare("select hostname from pfmo0_infrastructure where hostname=? and cron_status='ACTIVE'");
-  $sth->execute(hostname());
-  my %hash = %{$sth->fetchall_hashref('hostname')};
-  $sth->finish();
-
-  # print Dumper(%hash);
-
-  # if no host was found bail out
-  if ((keys %hash) == 0) {
-    exit 0;
+  if (defined $dbh) {
+    my $count = $dbh->selectrow_array("select count(*) from pfmo0_infrastructure where hostname=? and cron_status='ACTIVE'", undef, hostname());
+    # if no host was found bail out
+    if ($count == 0) {
+      exit 0;
+    }
   }
 }
 
